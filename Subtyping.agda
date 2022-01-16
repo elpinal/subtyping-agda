@@ -8,7 +8,7 @@ open import Cubical.Foundations.Transport using (transport⁻Transport)
 open import Cubical.Data.Nat using (ℕ; zero; suc; _+_; +-comm; snotz; znots; +-suc; +-zero; injSuc; isSetℕ)
 open import Cubical.Data.Nat.Order using (_≟_; lt; eq; gt; ≤-k+; ≤-+k; ≤-trans; pred-≤-pred; _≤_; _<_; ¬m+n<m; ¬-<-zero; suc-≤-suc; <-k+; <-+k; zero-≤; m≤n-isProp; <≤-trans; ≤-refl)
 open import Cubical.Data.Fin using (Fin; toℕ; fzero; fsuc; Fin-fst-≡)
-open import Cubical.Data.Sigma using (_,_; fst; snd; ΣPathP)
+open import Cubical.Data.Sigma using (_×_; _,_; fst; snd; ΣPathP)
 open import Cubical.Data.Sum using (_⊎_; inl; inr)
 import Cubical.Data.Empty as Empty
 
@@ -55,6 +55,7 @@ infixr 8 _=>_
 
 data Type : Set where
   base : Base -> Type
+  Top : Type
   _=>_ : Type -> Type -> Type
 
 data Context : ℕ -> Set where
@@ -150,6 +151,13 @@ _+++_+++_ : forall {m n} -> Context m -> Type -> Context n -> Context (suc (m + 
 ++++++-[]=-hit G1 (C ∷ G2) j≡n (here .C .(G2 +++ _ +++ G1)) = Empty.rec (znots j≡n)
 ++++++-[]=-hit G1 (C ∷ G2) j≡n (there .C l) = ++++++-[]=-hit G1 G2 (injSuc j≡n) l
 
+infix 2 _<:_
+
+data _<:_ : Type -> Type -> Set where
+  S-Refl : forall {A} -> A <: A
+  S-Arr : forall {A1 B1 A2 B2} -> A2 <: A1 -> B1 <: B2 -> A1 => B1 <: A2 => B2
+  S-Top : forall {A} -> A <: Top
+
 infix 2 _⊢_::_
 
 data _⊢_::_ {n : ℕ} (G : Context n) : Term n -> Type -> Set where
@@ -166,6 +174,11 @@ data _⊢_::_ {n : ℕ} (G : Context n) : Term n -> Type -> Set where
     -> G ⊢ e2 :: A
     -> G ⊢ e1 · e2 :: B
 
+  sub : forall {A B : Type} {e}
+    -> G ⊢ e :: A
+    -> A <: B
+    -> G ⊢ e :: B
+
 weakening : forall {m n} (i : Fin (suc m)) {G : Context m} (G' : Context n) {e : Term m} {A}
   -> G ⊢ e :: A
   -> inserts i G' G ⊢ shift n i e :: A
@@ -177,6 +190,7 @@ weakening {m = m} {n = n} i {G = G} G' {e = var j} (axiom l)
 weakening {n = n} i {G = G} G' {e = abs e} {A = A => B} (=>I D) =
   =>I (subst (λ f -> (A ∷ inserts f G' G) ⊢ shift n (fsuc i) e :: B) (Fin-fst-≡ {j = i} refl) (weakening (fsuc i) G' D))
 weakening i G' (=>E D D₁) = =>E (weakening i G' D) (weakening i G' D₁)
+weakening i G' (sub D s) = sub (weakening i G' D) s
 
 helper3 : forall {n} -> (suc n , ≤-refl) ≡ (suc n , suc-≤-suc ≤-refl)
 helper3 = Fin-fst-≡ refl
@@ -204,6 +218,7 @@ substitution : forall {m n} (G1 : Context m) (G2 : Context n) (e1 : Term (suc (n
   -> G1 ⊢ e2 :: A
   -> G2 +++ A +++ G1 ⊢ e1 :: B
   -> G2 ++ G1 ⊢ subst′ e2 (n , ≤-refl) e1 :: B
+substitution G1 G2 e1 D' (sub D s) = sub (substitution G1 G2 e1 D' D) s
 substitution {m} {n} G1 G2 (var j) {e2 = e2} {B = B} D' (axiom l) with toℕ j ≟ toℕ (n , ≤-refl)
 ... | lt j<n = axiom (transport (λ i -> (G2 ++ G1) [ helper4 m n j j<n i ]= B) (++++++-[]=-unaffected G1 G2 j<n l))
 ... | eq j≡n = let a = weakening fzero G2 D' in transport (λ i → helper5 m n G1 G2 i ⊢ helper7 m n (shift n fzero e2) i :: ++++++-[]=-hit G1 G2 j≡n l i ) a
@@ -213,12 +228,41 @@ substitution {m} {n} G1 G2 (var j) {e2 = e2} {B = B} D' (axiom l) with toℕ j �
 substitution G1 G2 (abs e1) {e2 = e2} D' (=>I {A} {B} D) = =>I (transport (λ i → (A ∷ (G2 ++ G1)) ⊢ subst′ e2 (helper3 i) e1 :: B) (substitution G1 (A ∷ G2) e1 D' D))
 substitution G1 G2 (e · e') D' (=>E D D₁) = =>E (substitution G1 G2 e D' D) (substitution G1 G2 e' D' D₁)
 
+S-Trans : forall {A B C}
+  -> A <: B
+  -> B <: C
+  -> A <: C
+S-Trans S-Refl s2 = s2
+S-Trans (S-Arr s1 s3) S-Refl = S-Arr s1 s3
+S-Trans (S-Arr s1 s3) (S-Arr s2 s4) = S-Arr (S-Trans s2 s1) (S-Trans s3 s4)
+S-Trans (S-Arr s1 s3) S-Top = S-Top
+S-Trans S-Top S-Refl = S-Top
+S-Trans S-Top S-Top = S-Top
+
+inversion/S-Arr : forall {A1 B1 A2 B2}
+  -> A1 => B1 <: A2 => B2
+  -> (A2 <: A1) × (B1 <: B2)
+inversion/S-Arr S-Refl = S-Refl , S-Refl
+inversion/S-Arr (S-Arr s s₁) = s , s₁
+
+inversion/=>I : forall {n} {G : Context n} {e : Term (suc n)} {A}
+  -> G ⊢ abs e :: A
+  -> Σ[ B ∈ Type ] Σ[ C ∈ Type ] ((B ∷ G ⊢ e :: C)  ×  (B => C <: A))
+inversion/=>I (=>I D) = _ , _ , D , S-Refl
+inversion/=>I (sub D s)
+  with inversion/=>I D
+... | B , C , D' , s' = B , C , D' , S-Trans s' s
+
 preservation : forall {n} {G : Context n} (e : Term n) {e' : Term n} {A}
   -> G ⊢ e :: A
   -> e ▷ e'
   -> G ⊢ e' :: A
+preservation e (sub D s) st = sub (preservation e D st) s
 preservation (_ · _) (=>E D D₁) (cong/app s) = =>E (preservation _ D s) D₁
-preservation {G = G} (abs e1 · e2) (=>E (=>I D) D₁) beta/=> = substitution G [] e1 D₁ D
+preservation {G = G} (abs e1 · e2) (=>E D D₁) beta/=>
+  with inversion/=>I D
+... | _ , _ , D , s with inversion/S-Arr s
+... | sdom , scod = substitution G [] e1 (sub D₁ sdom) (sub D scod)
 
 -- Path.
 data P {n : ℕ} : Term n -> Set where
@@ -238,3 +282,4 @@ progress {e = e1 · e2} (=>E D D₁) with e1 | progress D
 ... | _      | inl (e1' , s) = inl ((e1' · e2) , cong/app s)
 ... | _      | inr (` p)     = inr (` app p)
 ... | abs e1 | inr abs       = inl (subst′ e2 fzero e1 , beta/=>)
+progress (sub D _) = progress D
