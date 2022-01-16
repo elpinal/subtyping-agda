@@ -12,7 +12,7 @@ open import Cubical.Data.Sigma using (_×_; _,_; fst; snd; ΣPathP)
 open import Cubical.Data.Sum using (_⊎_; inl; inr)
 import Cubical.Data.Empty as Empty
 
--- A term with `n` free variables.
+-- A term with at most `n` free variables.
 data Term (n : ℕ) : Set where
   var : Fin n -> Term n
   abs : Term (suc n) -> Term n
