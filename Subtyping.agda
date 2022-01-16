@@ -184,7 +184,7 @@ weakening : forall {m n} (i : Fin (suc m)) {G : Context m} (G' : Context n) {e :
   -> inserts i G' G ⊢ shift n i e :: A
 weakening {m = m} {n = n} i {G = G} G' {e = var j} (axiom l)
   with toℕ i ≟ toℕ j
-... | lt i<j = axiom ((inserts-[]=-shifted G G' i (≤-trans (1 , refl) i<j) l))
+... | lt i<j = axiom (inserts-[]=-shifted G G' i (≤-trans (1 , refl) i<j) l)
 ... | eq i≡j = axiom (inserts-[]=-shifted G G' i (0 , i≡j) l)
 ... | gt j<i = axiom (inserts-[]=-unaffected G G' i j<i l)
 weakening {n = n} i {G = G} G' {e = abs e} {A = A => B} (=>I D) =
